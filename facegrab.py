@@ -25,58 +25,77 @@ SOFTWARE.
 from __future__ import print_function
 import sys
 import os
-try:
-    from urllib import urlopen
-except ImportError:
-    from urllib.request import urlopen
+import requests
 from datetime import datetime
 from random import randint
 
-def create_dir(prefix):
-    dir_c = os.path.join(os.getcwd(), prefix, datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
-    try:
-        os.makedirs(dir_c)
-    except OSError as e:
-        if e.errno != 17:
-            pass
-        else:
-            print("Cannot create a folder.")
-            exit
-    return dir_c
 
-def genUrl(name):
-    return "http://graph.facebook.com/picture?id=" + name + "&width=800"
+class Facegrab:
+    def __init__(self):
+        self.base_url = "http://graph.facebook.com/picture?id={}&width=800"
+        self.sess = requests.Session()
+        self.sess.headers.update({
+            "User-Agent": "Facegrab v2"
+        })
 
-def getProfile(photoUrl, saveUrl):
-    print("Downloading " + photoUrl + ".")
-    response = urlopen(photoUrl)
-    if response.geturl() != "https://static.xx.fbcdn.net/rsrc.php/v3/yo/r/UlIqmHJn-SK.gif":
-        open(saveUrl, "wb").write(response.read())
+    @staticmethod
+    def create_dir(prefix):
+        dir_c = os.path.join(
+            os.getcwd(),
+            prefix,
+            datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        )
+        try:
+            os.makedirs(dir_c)
+        except OSError as e:
+            if e.errno != 17:
+                pass
+            else:
+                print("Cannot create a folder.")
+                exit
+        return dir_c
+
+    def getProfile(self, photoUrl, saveUrl):
+        print(f"Downloading {photoUrl}.")
+        response = self.sess.get(photoUrl)
+        if response.headers["Content-Type"] == "image/gif":
+            return
+        with open(saveUrl, "wb") as f:
+            f.write(response.content)
         return True
-    return False
 
-def getImages(sizeDataset):
-    id = randint(1, int(1e4))
-    photoCount = 0
-    folder = create_dir("facegrab")
-    while photoCount < sizeDataset:
-        if getProfile(genUrl(str(id)), folder + "/" + str(id) + ".jpg"):
-            photoCount += 1
-            id += 1
-        else:
-            id += 10
-    print("\nFace Dataset created in facegrab folder.")
-    print("Size: " + str(photoCount))
-    return
-
-def main():
-    arguments = list(sys.argv[1:])
-    if len(arguments) == 1 and arguments[0].isdigit() and int(arguments[0]) < int(1e7):
-        getImages(int(arguments[0]))
-    else:
-        print("\nIncorrect arguments.")
-        print("Usage: python facegrab.py <dataset size (integer < 10,000,000)>")
-    return
+    def getImages(self, sizeDataset):
+        _id = randint(1, int(1e4))
+        photoCount = 0
+        folder = self.create_dir("facegrab")
+        while photoCount < sizeDataset:
+            profile = self.getProfile(
+                self.base_url.format(_id),
+                f"{folder}/{_id}.jpg"
+            )
+            if profile:
+                photoCount += 1
+                _id += 1
+            else:
+                _id += 10    # Cannot understand the logic behind this.
+        print(
+            "\nFace Dataset created in facegrab folder."
+            f"\nSize: {photoCount}"
+        )
+        print()
+        return
 
 if __name__ == "__main__":
-    main()
+    checks = [
+        len(sys.argv) == 2,
+        sys.argv[1].isdigit(),
+        int(sys.argv[1]) < int(1e7)
+    ]
+    if all(checks):
+        grabby = Facegrab()
+        grabby.getImages(int(sys.argv[1]))
+    else:
+        print("\nIncorrect arguments.")
+        print(
+            "Usage: python facegrab.py <dataset size (integer < 10,000,000)>"
+        )
